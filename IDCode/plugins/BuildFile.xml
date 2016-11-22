@@ -1,5 +1,5 @@
 <export>
 </export>
-<library   name="HEEPIDCode_plugins" file="PATPackedCandsForTkIso.cc,ElectronHEEPIDValueMapProducer.cc">
+<library   name="HEEPIDCode_plugins" file="*.cc">
   <use   name="HEEP/IDCode"/>
 </library>

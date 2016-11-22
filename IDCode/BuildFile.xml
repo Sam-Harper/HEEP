@@ -10,6 +10,8 @@
 <use   name="Geometry/CaloTopology"/>
 <use   name="Geometry/CaloGeometry"/>
 <use   name="CondFormats/DataRecord"/>
+<use   name="PhysicsTools/SelectorUtils"/>
+<use   name="RecoEgamma/ElectronIdentification"/>
 <export>
   <lib   name="1"/>
 </export>
