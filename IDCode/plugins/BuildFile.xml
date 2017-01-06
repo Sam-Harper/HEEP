@@ -1,5 +1,0 @@
-<export>
-</export>
-<library   name="HEEPIDCode_plugins" file="*.cc">
-  <use   name="HEEP/IDCode"/>
-</library>
