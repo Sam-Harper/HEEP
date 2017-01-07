@@ -7,15 +7,17 @@
 #include "DataFormats/PatCandidates/interface/Electron.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "DataFormats/Common/interface/ValueMap.h"
-#include "SHarper/HEEPAnalyzer/interface/HEEPCutCodes.h"
-#include "DataFormats/HepMCCandidate/interface/GenParticleFwd.h"
-#include "DataFormats/HepMCCandidate/interface/GenParticle.h"
 #include "DataFormats/PatCandidates/interface/VIDCutFlowResult.h"
 
-#include "TH1D.h"
-#include "CommonTools/UtilAlgos/interface/TFileService.h"
-#include "FWCore/ServiceRegistry/interface/Service.h"
-
+//these header files give us easy to use shortcuts for which cut
+//corresponds to which which cutnr
+//this is fixed for a given ID (and can be different for each ID)
+//hence its hard coded
+//also these headerfiles are intentionally completely standalone 
+//so you can easily include them in your analysis if you find them
+//useful
+#include "HEEP/VID/interface/CutNrs.h"
+#include "HEEP/VID/interface/VIDCutCodes.h"
 
 //**********************************************************
 //
@@ -83,7 +85,22 @@ void HEEPV70PATExample::analyze(const edm::Event& iEvent,const edm::EventSetup& 
     //access the detailed information on the HEEP ID
     const int heepIDBits = ele.userInt("heepElectronID_HEEPV70Bitmap");
   
-    
+    if(nrSatCrys!=0) std::cout <<"nrSatCrys "<<nrSatCrys<<std::endl;
+
+    //the HEEP ID bits can be turn cuts on and off again
+    //lets require just the et,sigmaIEtaIEta, E2X5/E5x5 and H/E
+
+    //first, we need to know what which bits corrspond to which cuts
+    //cutnrs::HEEPV70 defines an enum corresponding each cut to bit
+    //VIDCutCodes uses this to give nice pass / fail functions
+    using HEEPV70 = VIDCutCodes<cutnrs::HEEPV70>;
+    //note, here we use a std::intialisation list (the {...}) to make 
+    //vector of all the cuts we would like to pass
+    const bool passEtShowerShapeHE = HEEPV70::pass(heepIDBits,{HEEPV70::ET,HEEPV70::SIGMAIETAIETA,HEEPV70::E2X5OVER5X5,HEEPV70::HADEM});
+
+    //now lets require all cuts except tracker isolation
+    const bool passN1TrkIso = HEEPV70::pass(heepIDBits,HEEPV70::TRKISO,HEEPV70::IGNORE);
+
     //now we are going to access all of the information above via the vid::CutFlowResult 
     //well except for the nrSatCrys
 
@@ -92,7 +109,28 @@ void HEEPV70PATExample::analyze(const edm::Event& iEvent,const edm::EventSetup& 
     //how to check if everything passed:
     const bool heepIDVID = vidResult->cutFlowPassed();
 
+    if(heepID!=heepIDVID) std::cout <<"error in VID HEEP ID result "<<std::endl;
     
+    //how to get the track isolation from VID
+    //note, this works for all cuts except E2x5/E5x5 although this is a feature which is
+    //not often used so safer to use the standard accessors
+    //trk isolation value is confirmed to be okay though
+    const float trkIsoVID = vidResult->getValueCutUpon(HEEPV70::TRKISO);
+    if(trkIso!=trkIsoVID) std::cout <<"error in VID trk isol "<<std::endl;
+    
+    //now lets do selective cuts like we did before
+    const bool passEtShowerShapeHEVID = vidResult->getCutResultByIndex(HEEPV70::ET)
+      && vidResult->getCutResultByIndex(HEEPV70::SIGMAIETAIETA) 
+      && vidResult->getCutResultByIndex(HEEPV70::E2X5OVER5X5)
+      && vidResult->getCutResultByIndex(HEEPV70::HADEM);
+
+    //now for track isolation
+    //now this may not be the fastest function as it makes a new cut flow...
+    const bool passN1TrkIsoVID = vidResult->getCutFlowResultMasking(HEEPV70::TRKISO).cutFlowPassed();
+    
+    if(passEtShowerShapeHE != passEtShowerShapeHEVID) std::cout <<"error in VID showershape cuts"<<std::endl;
+    if(passN1TrkIso != passN1TrkIsoVID) std::cout <<"error in VID trk iso cuts"<<std::endl;
+   
 
   }
   

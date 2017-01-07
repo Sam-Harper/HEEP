@@ -1,14 +1,9 @@
+isMC=True
+useMiniAOD=True
+
+# Import configurations
 import FWCore.ParameterSet.Config as cms
 
-from FWCore.ParameterSet.VarParsing import VarParsing
-options = VarParsing ('analysis')
-options.register ('useMiniAOD',
-                  False,
-                  VarParsing.multiplicity.singleton,
-                  VarParsing.varType.bool,
-                  "use miniAOD rather than AOD")
-options.parseArguments()
-useMiniAOD=options.useMiniAOD
 
 # set up process
 process = cms.Process("HEEP")
@@ -24,7 +19,12 @@ process.load('Configuration.StandardSequences.MagneticField_cff')
 #setup global tag
 from Configuration.AlCa.GlobalTag import GlobalTag
 from Configuration.AlCa.autoCond import autoCond
-process.GlobalTag = GlobalTag(process.GlobalTag, '80X_mcRun2_asymptotic_2016_TrancheIV_v4', '') #
+if isMC:
+    #process.GlobalTag.globaltag = autoCond['run2_mc']
+    process.GlobalTag = GlobalTag(process.GlobalTag, '80X_mcRun2_asymptotic_2016_TrancheIV_v4', '') 
+else:
+    #process.GlobalTag.globaltag = autoCond['run2_data']
+    process.GlobalTag = GlobalTag(process.GlobalTag, '80X_dataRun2_2016SeptRepro_v4', '')
 
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
@@ -35,35 +35,51 @@ process.source = cms.Source ("PoolSource",fileNames = cms.untracked.vstring(
 )
 
 if useMiniAOD==True:
-    process.source.fileNames=cms.untracked.vstring('/store/mc/RunIISpring16MiniAODv2/ZToEE_NNPDF30_13TeV-powheg_M_200_400/MINIAODSIM/PUSpring16RAWAODSIM_reHLT_80X_mcRun2_asymptotic_v14-v1/20000/0C242E56-BA3A-E611-9B2D-0242AC130004.root',)
+    process.source.fileNames=cms.untracked.vstring('file:/opt/ppd/scratch/harper/mcTestFiles/ZToEE_NNPDF30_13TeV-powheg_M_200_400_MINIAODSIM_PUSpring16RAWAODSIM_reHLT_80X_mcRun2_asymptotic_v14-v1_0C242E56-BA3A-E611-9B2D-0242AC130004.root',)
 
-#setup the VID with HEEP 7.0
+#setup the VID with HEEP 7.0, not necessary if you dont want to use VID
 from PhysicsTools.SelectorUtils.tools.vid_id_tools import *
 # turn on VID producer, indicate data format  to be
 # DataFormat.AOD or DataFormat.MiniAOD, as appropriate
 if useMiniAOD:
-    switchOnVIDElectronIdProducer(process, DataFormat.MiniAOD)
+    dataFormat = DataFormat.MiniAOD
 else:
-    switchOnVIDElectronIdProducer(process, DataFormat.AOD)
-
+    dataFormat = DataFormat.AOD
+switchOnVIDElectronIdProducer(process, dataFormat)
 # define which IDs we want to produce
-my_id_modules = ['RecoEgamma.ElectronIdentification.Identification.heepElectronID_HEEPV70_cff']
+#my_id_modules = ['RecoEgamma.ElectronIdentification.Identification.heepElectronID_HEEPV70_cff']
+my_id_modules = ['HEEP.IDCode.heepElectronID_HEEPV70_cff']
 #add them to the VID producer
 for idmod in my_id_modules:
     setupAllVIDIdsInModule(process,idmod,setupVIDElectronSelection)
 
 
 #this is our example analysis module reading the results
-process.heepIdExample = cms.EDAnalyzer("HEEPV70PATExample",
+process.heepIdVIDComp = cms.EDAnalyzer("HEEPV70Example",
                                        elesAOD=cms.InputTag("gedGsfElectrons"),
                                        elesMiniAOD=cms.InputTag("slimmedElectrons"),
                                        trkIsolMap=cms.InputTag("heepIDVarValueMaps","eleTrkPtIso"),
                                        vid=cms.InputTag("egmGsfElectronIDs:heepElectronID-HEEPV70")
                                        )
 
+
+#loads in the the module to make the new track isolation
+process.load("HEEP.IDCode.heepIdVarValueMapProducer_cfi")
+
 process.p = cms.Path(
-    process.egmGsfElectronIDSequence* 
-    process.heepIdExample) #our analysing example module, replace with your module
+    process.heepIDVarValueMaps* #makes the new track isolation
+    process.egmGsfElectronIDSequence* #makes the VID value maps, only necessary if you use VID
+    process.heepIdVIDComp) #our analysing example module, replace with your module
+
+#if we are running AOD, we need to make the packed candidates
+#this sequence makes them
+if useMiniAOD==False:
+    process.load("TrackingTools.TransientTrack.TransientTrackBuilder_cfi")
+    process.load("PhysicsTools.PatAlgos.slimming.primaryVertexAssociation_cfi")
+    process.load("PhysicsTools.PatAlgos.slimming.packedCandidatesForTrkIso_cfi")
+    process.p.insert(0,process.primaryVertexAssociation)
+    process.p.insert(1,process.packedCandsForTkIso)
+
 
 #dumps the products made for easier debugging
 process.load('Configuration.EventContent.EventContent_cff')

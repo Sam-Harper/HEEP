@@ -25,27 +25,8 @@ process.source = cms.Source ("PoolSource",fileNames = cms.untracked.vstring(
         )
 )
 
-#setup the VID with HEEP 7.0
-from PhysicsTools.SelectorUtils.tools.vid_id_tools import *
-# turn on VID producer, indicate data format  to be
-# DataFormat.AOD or DataFormat.MiniAOD, as appropriate
-switchOnVIDElectronIdProducer(process, DataFormat.MiniAOD)
-
-process.load("HEEP.VID.addHEEPV70ToEles_cfi") 
-
-# define which IDs we want to produce
-my_id_modules = ['RecoEgamma.ElectronIdentification.Identification.heepElectronID_HEEPV70_cff']
-#add them to the VID producer
-for idmod in my_id_modules:
-    setupAllVIDIdsInModule(process,idmod,setupVIDElectronSelection)
-process.heepIDVarValueMaps.elesMiniAOD = cms.InputTag("slimmedElectrons",processName=cms.InputTag.skipCurrentProcess())
-process.egmGsfElectronIDs.physicsObjectSrc = \
-    cms.InputTag("slimmedElectrons",processName=cms.InputTag.skipCurrentProcess())
-#process.electronMVAValueMapProducer.src = \
-#    cms.InputTag("slimmedElectrons",processName=cms.InputTag.skipCurrentProcess())
-#process.electronRegressionValueMapProducer.src = \
-#        cms.InputTag("slimmedElectrons",processName=cms.InputTag.skipCurrentProcess())
-
+from HEEP.VID.tools import addHEEPV70ElesMiniAOD
+addHEEPV70ElesMiniAOD(process,useStdName=False)
 
 #this is our example analysis module reading the results
 process.heepIdExample = cms.EDAnalyzer("HEEPV70PATValidation",
@@ -57,8 +38,7 @@ process.heepIdExample = cms.EDAnalyzer("HEEPV70PATValidation",
                                        )
 
 process.p = cms.Path(
-    process.egmGsfElectronIDSequence* 
-    process.addHEEPToSlimmedElectrons*
+    process.heepSequence*
     process.heepIdExample) #our analysing example module, replace with your module
 
 #dumps the products made for easier debugging
