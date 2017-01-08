@@ -1,5 +1,9 @@
 <export>
 </export>
-<library   name="HEEPVID_plugins" file="">
-  <use   name="HEEP/HEEPVID"/>
+<library   name="HEEPVID_plugins" file="HEEPV70Example.cc,HEEPV70PATExample.cc,HEEPV70PATValidation.cc">
+  <use   name="root"/>
+  <use   name="FWCore/Framework"/>
+  <use   name="DataFormats/Common"/>
+  <use   name="DataFormats/EgammaCandidates"/>
+  <use   name="DataFormats/PatCandidates"/>
 </library>
