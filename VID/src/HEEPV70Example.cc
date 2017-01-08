@@ -59,7 +59,18 @@
 //        I do not consider this useful
 
 
-class HEEPV70Example : public edm::stream::EDAnalyzer<> {
+//a struct to count the number of electrons passing/failing
+//see https://twiki.cern.ch/twiki/bin/view/CMSPublic/FWMultithreadedFrameworkStreamModuleInterface
+//if you dont understand why I'm doing this
+namespace{
+  struct NrPassFail {
+    NrPassFail():nrPass(0),nrFail(0){}
+    mutable std::atomic<int> nrPass;
+    mutable std::atomic<int> nrFail;
+  };
+}
+
+class HEEPV70Example : public edm::stream::EDAnalyzer<edm::GlobalCache<NrPassFail>> {
 
 private:
  
@@ -70,27 +81,35 @@ private:
   edm::EDGetTokenT<edm::ValueMap<vid::CutFlowResult> >  vidResultToken_;
   
   
-  edm::EDGetTokenT<edm::ValueMap<float> > nrSatCrysMapToken_; 
+  edm::EDGetTokenT<edm::ValueMap<int> > nrSatCrysMapToken_; 
   edm::EDGetTokenT<edm::ValueMap<float> > trkIsoMapToken_; 
 
   
 public:
-  explicit HEEPV70Example(const edm::ParameterSet& iPara);
+  explicit HEEPV70Example(const edm::ParameterSet& iPara,const NrPassFail*);
   virtual ~HEEPV70Example(){}
   
-private:
+  static std::unique_ptr<NrPassFail> initializeGlobalCache(const edm::ParameterSet&) {
+    return std::make_unique<NrPassFail>();
+  }
   void analyze(const edm::Event& iEvent,const edm::EventSetup& iSetup) override;
+  static void globalEndJob(const NrPassFail* nrPassFail) {
+    std::cout <<"nr eles pass "<<nrPassFail->nrPass<<" / "<<nrPassFail->nrPass+nrPassFail->nrFail<<std::endl;
+  }
 };
   
 
-HEEPV70Example::HEEPV70Example(const edm::ParameterSet& iPara)
+HEEPV70Example::HEEPV70Example(const edm::ParameterSet& iPara,const NrPassFail*)
 {
+  //the sharp eyed amoungst you will notice I use the "vid" tag twice
+  //this is because VID products have the same label (just different types)
+  //the exception is for the bitmap as VID was already producing an unsigned int so it needed a different name
   eleAODToken_=consumes<edm::View<reco::GsfElectron> >(iPara.getParameter<edm::InputTag>("elesAOD"));
   eleMiniAODToken_=consumes<edm::View<reco::GsfElectron> >(iPara.getParameter<edm::InputTag>("elesMiniAOD"));
   vidPassToken_=consumes<edm::ValueMap<bool> >(iPara.getParameter<edm::InputTag>("vid"));
   vidBitmapToken_=consumes<edm::ValueMap<unsigned int> >(iPara.getParameter<edm::InputTag>("vidBitmap"));
   vidResultToken_=consumes<edm::ValueMap<vid::CutFlowResult> >(iPara.getParameter<edm::InputTag>("vid"));
-  nrSatCrysMapToken_=consumes<edm::ValueMap<float> >(iPara.getParameter<edm::InputTag>("nrSatCrysMap"));
+  nrSatCrysMapToken_=consumes<edm::ValueMap<int> >(iPara.getParameter<edm::InputTag>("nrSatCrysMap"));
   trkIsoMapToken_=consumes<edm::ValueMap<float> >(iPara.getParameter<edm::InputTag>("trkIsoMap"));
   
 }
@@ -104,7 +123,7 @@ void HEEPV70Example::analyze(const edm::Event& iEvent,const edm::EventSetup& iSe
   edm::Handle<edm::ValueMap<unsigned int> > vidBitmap;
   edm::Handle<edm::ValueMap<vid::CutFlowResult> > vidResult;
   
-  edm::Handle<edm::ValueMap<float> > nrSatCrysMap;
+  edm::Handle<edm::ValueMap<int> > nrSatCrysMap;
   edm::Handle<edm::ValueMap<float> > trkIsoMap;
 
   //we done know if we have miniAOD or AOD, try both, AOD first and get
@@ -117,6 +136,7 @@ void HEEPV70Example::analyze(const edm::Event& iEvent,const edm::EventSetup& iSe
   iEvent.getByToken(vidBitmapToken_,vidBitmap);
   iEvent.getByToken(vidResultToken_,vidResult);
   iEvent.getByToken(trkIsoMapToken_,trkIsoMap);
+  iEvent.getByToken(nrSatCrysMapToken_,nrSatCrysMap);
 
   for(size_t eleNr=0;eleNr<eleHandle->size();eleNr++){  
     edm::Ptr<reco::GsfElectron> elePtr(eleHandle,eleNr); //note we use an edm::Ptr rather than an edm::Ref
@@ -125,6 +145,10 @@ void HEEPV70Example::analyze(const edm::Event& iEvent,const edm::EventSetup& iSe
    
     //this allows to tell if the electron passed HEEPV70, true = passed
     bool passHEEPV70=(*vidPass)[elePtr]; 
+
+    //lets count the number of pass / fail so we can compare against the reference
+    if(passHEEPV70) globalCache()->nrPass++;
+    else globalCache()->nrFail++;
     
     //this gives us to determine exactly which cuts the electron passed
     //each bit of this unsigned int corresponds to a cut, 0=fail, 1 =pass
@@ -179,6 +203,9 @@ void HEEPV70Example::analyze(const edm::Event& iEvent,const edm::EventSetup& iSe
     //now for track isolation
     //now this may not be the fastest function as it makes a new cut flow...
     const bool passN1TrkIsoVID = heepCutFlowResult.getCutFlowResultMasking(HEEPV70::TRKISO).cutFlowPassed();
+
+    //for debuging, all values here printed should be over 5 GeV
+    if(passN1TrkIso && !passHEEPV70) std::cout <<" trk isol "<<trkIso<<std::endl;
     
     if(passEtShowerShapeHE != passEtShowerShapeHEVID) std::cout <<"error in VID showershape cuts"<<std::endl;
     if(passN1TrkIso != passN1TrkIsoVID) std::cout <<"error in VID trk iso cuts"<<std::endl;

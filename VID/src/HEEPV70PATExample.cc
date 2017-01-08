@@ -45,22 +45,41 @@
 //     which cuts passed/failed etc
 //     contains all of over the above information except for nr of sat crys
 
-class HEEPV70PATExample : public edm::stream::EDAnalyzer<> {
+
+
+//a struct to count the number of electrons passing/failing
+//see https://twiki.cern.ch/twiki/bin/view/CMSPublic/FWMultithreadedFrameworkStreamModuleInterface
+//if you dont understand why I'm doing this
+namespace{
+  struct NrPassFail {
+    NrPassFail():nrPass(0),nrFail(0){}
+    mutable std::atomic<int> nrPass;
+    mutable std::atomic<int> nrFail;
+  };
+}
+
+class HEEPV70PATExample : public edm::stream::EDAnalyzer<edm::GlobalCache<NrPassFail>> {
 
 private:
  
   edm::EDGetTokenT<edm::View<pat::Electron> > eleToken_;
   
 public:
-  explicit HEEPV70PATExample(const edm::ParameterSet& iPara);
+  explicit HEEPV70PATExample(const edm::ParameterSet& iPara,const NrPassFail*);
   virtual ~HEEPV70PATExample(){}
   
-private:
+  static std::unique_ptr<NrPassFail> initializeGlobalCache(const edm::ParameterSet&) {
+    return std::make_unique<NrPassFail>();
+  }
   void analyze(const edm::Event& iEvent,const edm::EventSetup& iSetup) override;
+  static void globalEndJob(const NrPassFail* nrPassFail) {
+    std::cout <<"nr eles pass "<<nrPassFail->nrPass<<" / "<<nrPassFail->nrPass+nrPassFail->nrFail<<std::endl;
+  }
+  
 };
   
 
-HEEPV70PATExample::HEEPV70PATExample(const edm::ParameterSet& iPara)
+HEEPV70PATExample::HEEPV70PATExample(const edm::ParameterSet& iPara,const NrPassFail*)
 {
   eleToken_=consumes<edm::View<pat::Electron> >(iPara.getParameter<edm::InputTag>("eles")); 
 }
@@ -86,6 +105,11 @@ void HEEPV70PATExample::analyze(const edm::Event& iEvent,const edm::EventSetup& 
     const int heepIDBits = ele.userInt("heepElectronID_HEEPV70Bitmap");
   
     if(nrSatCrys!=0) std::cout <<"nrSatCrys "<<nrSatCrys<<std::endl;
+
+    //lets count the number of pass / fail so we can compare against the reference
+    if(heepID) globalCache()->nrPass++;
+    else globalCache()->nrFail++;
+    
 
     //the HEEP ID bits can be turn cuts on and off again
     //lets require just the et,sigmaIEtaIEta, E2X5/E5x5 and H/E

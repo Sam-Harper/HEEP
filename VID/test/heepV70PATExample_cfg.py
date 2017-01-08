@@ -25,10 +25,15 @@ process.source = cms.Source ("PoolSource",fileNames = cms.untracked.vstring(
         )
 )
 
+#we setup the HEEP ID V7.0 and enable VID via the following function
+#and then add it to a new collection of pat::Electrons
+#there is the option to call the new collection "slimmedElectrons" (useStdName=True)
+#otherwise it calls them "heepElectrons"
+#it creates a sequence "process.heepSequence" which we add to our path
 from HEEP.VID.tools import addHEEPV70ElesMiniAOD
 addHEEPV70ElesMiniAOD(process,useStdName=True)
 
-#this is our example analysis module reading the results
+#this is our example analysis module reading the results, you will have your own module
 process.heepIdExample = cms.EDAnalyzer("HEEPV70PATExample",
                                        eles=cms.InputTag("slimmedElectrons"),
                                        )
